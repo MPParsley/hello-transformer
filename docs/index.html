@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hello World Transformer</title>
+<style>
+  :root {
+    --bg:       #0d1117;
+    --surface:  #161b22;
+    --border:   #30363d;
+    --text:     #e6edf3;
+    --muted:    #8b949e;
+    --accent:   #58a6ff;
+    --green:    #3fb950;
+    --orange:   #d29922;
+    --red:      #f85149;
+    --radius:   8px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem 1rem;
+    gap: 2rem;
+  }
+
+  header {
+    text-align: center;
+    max-width: 700px;
+  }
+  header h1 { font-size: 2rem; font-weight: 700; margin-bottom: .4rem; }
+  header h1 span { color: var(--accent); }
+  header p { color: var(--muted); line-height: 1.6; }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .2rem .6rem;
+    border-radius: 20px;
+    font-size: .75rem;
+    font-weight: 600;
+    margin: .6rem .2rem 0;
+    border: 1px solid;
+  }
+  .badge.trained   { color: var(--green);  border-color: var(--green);  }
+  .badge.untrained { color: var(--orange); border-color: var(--orange); }
+  .badge.loading   { color: var(--muted);  border-color: var(--border); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem 1.5rem;
+    width: 100%;
+    max-width: 700px;
+  }
+  .card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: var(--accent); }
+
+  label {
+    display: block;
+    font-size: .85rem;
+    color: var(--muted);
+    margin-bottom: .3rem;
+  }
+
+  textarea, input[type="text"] {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: .9rem;
+    padding: .6rem .8rem;
+    resize: vertical;
+  }
+  textarea:focus, input[type="text"]:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+
+  .control-group { flex: 1; min-width: 140px; }
+
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+  }
+  .range-value { font-size: .8rem; color: var(--accent); float: right; }
+
+  button {
+    cursor: pointer;
+    border: none;
+    border-radius: var(--radius);
+    padding: .55rem 1.2rem;
+    font-size: .9rem;
+    font-weight: 600;
+    transition: opacity .15s;
+  }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+
+  #btn-generate {
+    background: var(--accent);
+    color: var(--bg);
+    margin-top: 1.2rem;
+    width: 100%;
+  }
+  #btn-stop {
+    background: var(--red);
+    color: #fff;
+    margin-top: .5rem;
+    width: 100%;
+    display: none;
+  }
+
+  #output-area {
+    margin-top: 1.2rem;
+  }
+  #output-area label { margin-bottom: .5rem; }
+
+  #output {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: .9rem;
+    line-height: 1.7;
+    padding: .8rem 1rem;
+    min-height: 5rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+    position: relative;
+  }
+  #cursor {
+    display: inline-block;
+    width: .5em;
+    height: 1.1em;
+    background: var(--accent);
+    vertical-align: text-bottom;
+    animation: blink .8s step-end infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* Attention heatmap */
+  #heatmap-card { overflow-x: auto; }
+  #heatmap-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: .1rem;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: .75rem;
+  }
+  .hm-row { display: flex; gap: .1rem; align-items: center; }
+  .hm-label {
+    width: 1.2rem;
+    text-align: right;
+    color: var(--muted);
+    flex-shrink: 0;
+    margin-right: .3rem;
+  }
+  .hm-cell {
+    width: 1.4rem;
+    height: 1.4rem;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .hm-col-labels { display: flex; gap: .1rem; margin-left: 1.9rem; }
+  .hm-col-label {
+    width: 1.4rem;
+    text-align: center;
+    color: var(--muted);
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+
+  .hm-controls {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: .8rem;
+    flex-wrap: wrap;
+  }
+  select {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: .3rem .6rem;
+    font-size: .85rem;
+  }
+
+  /* Architecture explanation */
+  .arch-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: .8rem;
+    margin-top: .5rem;
+  }
+  .arch-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: .7rem 1rem;
+    font-size: .85rem;
+  }
+  .arch-box .arch-label { color: var(--muted); font-size: .75rem; margin-bottom: .2rem; }
+  .arch-box .arch-val { color: var(--accent); font-weight: 700; font-size: 1.1rem; }
+
+  #status-msg {
+    font-size: .85rem;
+    color: var(--muted);
+    min-height: 1.2em;
+    margin-top: .5rem;
+  }
+
+  footer {
+    color: var(--muted);
+    font-size: .8rem;
+    text-align: center;
+    padding-bottom: 1rem;
+  }
+  footer a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Hello <span>World</span> Transformer</h1>
+  <p>
+    A minimal, trainable character-level transformer you can run entirely in the browser.
+    Weights are trained on GitHub Actions and deployed here automatically.
+  </p>
+  <div id="model-badges">
+    <span class="badge loading" id="badge-status">⏳ Loading…</span>
+  </div>
+</header>
+
+<!-- Generate card -->
+<div class="card">
+  <h2>Generate text</h2>
+
+  <label for="prompt">Prompt</label>
+  <textarea id="prompt" rows="2">Hello, World</textarea>
+
+  <div class="controls">
+    <div class="control-group">
+      <label>
+        Temperature
+        <span class="range-value" id="temp-val">0.8</span>
+      </label>
+      <input type="range" id="temperature" min="0.1" max="2.0" step="0.05" value="0.8" />
+    </div>
+    <div class="control-group">
+      <label>
+        Max new characters
+        <span class="range-value" id="tokens-val">200</span>
+      </label>
+      <input type="range" id="max-tokens" min="20" max="500" step="10" value="200" />
+    </div>
+  </div>
+
+  <button id="btn-generate" disabled>Generate</button>
+  <button id="btn-stop">Stop</button>
+
+  <div id="output-area">
+    <label>Output</label>
+    <div id="output"><span id="cursor"></span></div>
+  </div>
+
+  <div id="status-msg">Loading model weights…</div>
+</div>
+
+<!-- Attention heatmap -->
+<div class="card" id="heatmap-card" style="display:none">
+  <h2>Attention heatmap</h2>
+  <p style="color:var(--muted);font-size:.85rem;margin-bottom:.8rem">
+    Shows which input characters the model attends to when predicting each position.
+    Darker blue = stronger attention.
+  </p>
+  <div class="hm-controls">
+    <div>
+      <label>Layer</label>
+      <select id="hm-layer"><option value="0">0</option><option value="1">1</option></select>
+    </div>
+    <div>
+      <label>Head</label>
+      <select id="hm-head">
+        <option value="0">0</option><option value="1">1</option>
+        <option value="2">2</option><option value="3">3</option>
+      </select>
+    </div>
+  </div>
+  <div id="heatmap-wrap"></div>
+</div>
+
+<!-- Architecture info -->
+<div class="card">
+  <h2>Model architecture</h2>
+  <div class="arch-grid" id="arch-grid">
+    <div class="arch-box"><div class="arch-label">Type</div><div class="arch-val">Char-level LM</div></div>
+    <div class="arch-box"><div class="arch-label">Vocab size</div><div class="arch-val" id="a-vocab">—</div></div>
+    <div class="arch-box"><div class="arch-label">d_model</div><div class="arch-val" id="a-dmodel">—</div></div>
+    <div class="arch-box"><div class="arch-label">Layers</div><div class="arch-val" id="a-layers">—</div></div>
+    <div class="arch-box"><div class="arch-label">Heads</div><div class="arch-val" id="a-heads">—</div></div>
+    <div class="arch-box"><div class="arch-label">d_ff</div><div class="arch-val" id="a-dff">—</div></div>
+    <div class="arch-box"><div class="arch-label">Context length</div><div class="arch-val" id="a-maxlen">—</div></div>
+    <div class="arch-box"><div class="arch-label">Parameters</div><div class="arch-val" id="a-params">—</div></div>
+    <div class="arch-box"><div class="arch-label">Final loss</div><div class="arch-val" id="a-loss">—</div></div>
+  </div>
+</div>
+
+<footer>
+  <a href="https://github.com/MPParsley/hello-transformer" target="_blank">GitHub</a>
+  &nbsp;·&nbsp;
+  Run <code>python train.py</code> locally or trigger the GitHub Actions workflow to retrain.
+</footer>
+
+<script src="inference.js"></script>
+<script>
+// ── DOM refs ────────────────────────────────────────────────────────────────
+const promptEl    = document.getElementById("prompt");
+const tempEl      = document.getElementById("temperature");
+const tempVal     = document.getElementById("temp-val");
+const tokensEl    = document.getElementById("max-tokens");
+const tokensVal   = document.getElementById("tokens-val");
+const btnGenerate = document.getElementById("btn-generate");
+const btnStop     = document.getElementById("btn-stop");
+const outputEl    = document.getElementById("output");
+const cursorEl    = document.getElementById("cursor");
+const statusMsg   = document.getElementById("status-msg");
+const badgeEl     = document.getElementById("badge-status");
+const hmCard      = document.getElementById("heatmap-card");
+const hmWrap      = document.getElementById("heatmap-wrap");
+const hmLayer     = document.getElementById("hm-layer");
+const hmHead      = document.getElementById("hm-head");
+
+// ── Controls ────────────────────────────────────────────────────────────────
+tempEl.addEventListener("input", () => tempVal.textContent = (+tempEl.value).toFixed(2));
+tokensEl.addEventListener("input", () => tokensVal.textContent = tokensEl.value);
+
+// ── Model ───────────────────────────────────────────────────────────────────
+let model = null;
+let stopRequested = false;
+
+function countParams(cfg) {
+  const { vocab_size: V, d_model: D, n_heads: H, n_layers: L, d_ff: F, max_len: M } = cfg;
+  return V * D + M * D + L * (3 * D * D + D * D + 2 * D + 2 * D + D * F + F + F * D + D) + D + D + V * D;
+}
+
+async function init() {
+  try {
+    model = await loadModel(msg => { statusMsg.textContent = msg; });
+    const cfg = model.config;
+
+    // Update badge
+    badgeEl.className = "badge " + (model.trained ? "trained" : "untrained");
+    badgeEl.textContent = model.trained
+      ? `✓ Trained  (loss ${model.finalLoss})`
+      : "⚠ Random weights — run the GitHub Actions workflow to train";
+
+    // Populate architecture boxes
+    document.getElementById("a-vocab").textContent   = cfg.vocab_size;
+    document.getElementById("a-dmodel").textContent  = cfg.d_model;
+    document.getElementById("a-layers").textContent  = cfg.n_layers;
+    document.getElementById("a-heads").textContent   = cfg.n_heads;
+    document.getElementById("a-dff").textContent     = cfg.d_ff;
+    document.getElementById("a-maxlen").textContent  = cfg.max_len;
+    document.getElementById("a-params").textContent  = countParams(cfg).toLocaleString();
+    document.getElementById("a-loss").textContent    = model.trained ? model.finalLoss : "N/A";
+
+    btnGenerate.disabled = false;
+    statusMsg.textContent = "Model ready.";
+  } catch (err) {
+    badgeEl.className = "badge untrained";
+    badgeEl.textContent = "✗ Failed to load weights";
+    statusMsg.textContent = `Error: ${err.message}`;
+  }
+}
+init();
+
+// ── Generation ──────────────────────────────────────────────────────────────
+btnGenerate.addEventListener("click", async () => {
+  if (!model) return;
+
+  stopRequested = false;
+  const prompt      = promptEl.value;
+  const temperature = +tempEl.value;
+  const maxTokens   = +tokensEl.value;
+
+  outputEl.innerHTML = "";
+  outputEl.appendChild(cursorEl);
+
+  btnGenerate.disabled = true;
+  btnStop.style.display = "block";
+  statusMsg.textContent = "Generating…";
+
+  // Seed output with prompt (styled as muted)
+  const promptSpan = document.createElement("span");
+  promptSpan.style.color = "var(--muted)";
+  promptSpan.textContent = prompt;
+  outputEl.insertBefore(promptSpan, cursorEl);
+
+  let count = 0;
+  try {
+    for await (const ch of model.generateStream(prompt, maxTokens, temperature)) {
+      if (stopRequested) break;
+      const t = document.createTextNode(ch);
+      outputEl.insertBefore(t, cursorEl);
+      count++;
+    }
+  } catch (e) {
+    statusMsg.textContent = `Error: ${e.message}`;
+  }
+
+  btnGenerate.disabled = false;
+  btnStop.style.display = "none";
+  statusMsg.textContent = `Done — generated ${count} characters.`;
+
+  // Show attention heatmap for the final prompt
+  renderHeatmap(prompt + outputEl.textContent.slice(prompt.length, prompt.length + 32));
+  hmCard.style.display = "block";
+});
+
+btnStop.addEventListener("click", () => { stopRequested = true; });
+
+// ── Attention heatmap ────────────────────────────────────────────────────────
+function renderHeatmap(text) {
+  if (!model) return;
+  const tokens = model.encode(text).slice(0, 24);   // cap at 24 chars for readability
+  const chars  = tokens.map(id => model.idxToChar[id] ?? "?");
+
+  const layer  = +hmLayer.value;
+  const head   = +hmHead.value;
+  const attn   = model.attentionWeights(tokens, layer, head); // T×T
+
+  hmWrap.innerHTML = "";
+
+  // Column labels
+  const colRow = document.createElement("div");
+  colRow.className = "hm-col-labels";
+  chars.forEach(c => {
+    const el = document.createElement("div");
+    el.className = "hm-col-label";
+    el.textContent = c === " " ? "·" : c;
+    colRow.appendChild(el);
+  });
+  hmWrap.appendChild(colRow);
+
+  // Rows
+  attn.forEach((row, i) => {
+    const rowEl = document.createElement("div");
+    rowEl.className = "hm-row";
+
+    const lbl = document.createElement("div");
+    lbl.className = "hm-label";
+    lbl.textContent = chars[i] === " " ? "·" : chars[i];
+    rowEl.appendChild(lbl);
+
+    row.forEach((val, j) => {
+      const cell = document.createElement("div");
+      cell.className = "hm-cell";
+      const alpha = Math.round(val * 220);
+      cell.style.background = `rgba(88,166,255,${val.toFixed(3)})`;
+      cell.title = `attn[${i}][${j}] = ${val.toFixed(3)}`;
+      rowEl.appendChild(cell);
+    });
+    hmWrap.appendChild(rowEl);
+  });
+}
+
+hmLayer.addEventListener("change", () => {
+  if (hmCard.style.display !== "none") {
+    const text = promptEl.value;
+    renderHeatmap(text);
+  }
+});
+hmHead.addEventListener("change", () => {
+  if (hmCard.style.display !== "none") {
+    renderHeatmap(promptEl.value);
+  }
+});
+</script>
+</body>
+</html>

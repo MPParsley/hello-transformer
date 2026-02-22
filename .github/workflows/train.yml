@@ -1,0 +1,51 @@
+name: Train model
+
+on:
+  workflow_dispatch:
+    inputs:
+      steps:
+        description: "Training steps"
+        required: false
+        default: "2000"
+  push:
+    branches: [main]
+    paths:
+      - "train.py"
+      - "model.py"
+      - "requirements.txt"
+
+permissions:
+  contents: write
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies (CPU-only PyTorch)
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+
+      - name: Train transformer
+        run: |
+          python train.py \
+            --steps ${{ github.event.inputs.steps || '2000' }} \
+            --out docs/model/weights.json
+
+      - name: Commit updated weights
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/model/weights.json
+          git diff --cached --quiet || \
+            git commit -m "chore: update trained model weights [skip ci]"
+          git push
